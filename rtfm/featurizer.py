@@ -167,6 +167,26 @@ class Terminal(Featurizer):
         return {}
 
 
+class Render(Featurizer):
+    
+    def get_observation_space(self, task):
+        return {}
+
+    def clear(self):
+        # for windows
+        if os.name == 'nt':
+            _ = os.system('cls')
+            # for mac and linux(here, os.name is 'posix')
+        else:
+            _ = os.system('clear')
+
+    def featurize(self, task):
+        self.clear()
+        print("\r")
+        print(task.world.render(perspective=task.perspective))
+        return {}
+
+
 class Symbol(Featurizer):
 
     class_list = [

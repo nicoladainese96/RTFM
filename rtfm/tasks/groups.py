@@ -7,6 +7,7 @@
 import random
 import torch
 import itertools
+import copy
 from rtfm.dynamics import monster as M, descriptor as D, item as I, element as types, inventory as V
 from rtfm.tasks.room import RoomTask
 from rtfm import featurizer as F, utils
@@ -14,6 +15,10 @@ from rtfm.tasks import groups_templates
 
 
 ALL_TYPES = [types.Cold, types.Fire, types.Lightning, types.Poison]
+
+# global variables to fix the dynamics to a single scenario
+FIXED = True
+ID = 0
 
 
 def generate_all(all_monsters, all_groups, all_modifiers):
@@ -57,7 +62,8 @@ def generate_all(all_monsters, all_groups, all_modifiers):
             all_assignments.append((m, mm))
     all_assignments.sort()
 
-    random.Random(0).shuffle(all_assignments)
+    if not FIXED:
+        random.Random(0).shuffle(all_assignments)
 
     n = len(all_assignments) // 2
     train = all_assignments[:n]
@@ -115,7 +121,17 @@ class Groups(RoomTask):
                 speed=2,
             )
 
-    def __init__(self, room_shape=(10, 10), featurizer=F.Progress(), partially_observable=False, max_placement=2, max_name=8, max_inv=10, max_wiki=80, max_task=40, time_penalty=-0.02, shuffle_wiki=False):
+    def __init__(self, 
+                 room_shape=(10, 10), 
+                 featurizer=F.Progress(), 
+                 partially_observable=False, 
+                 max_placement=2, 
+                 max_name=2, #8
+                 max_inv=2, #10
+                 max_wiki=80, 
+                 max_task=40, 
+                 time_penalty=-0.02, 
+                 shuffle_wiki=False):
         self.configs = generate_all(self.monsters, self.groups, self.modifiers)[self.config_index]
         # what group of enemies to target
         self.target_monster = None
@@ -195,7 +211,10 @@ class Groups(RoomTask):
         self.modifier_assignment.clear()
 
         # sample dynamics
-        sample_group, sample_mod = random.choice(self.configs)
+        if FIXED:
+            sample_group, sample_mod = self.configs[ID]
+        else:
+            sample_group, sample_mod = random.choice(self.configs)
         for group, monsters in sorted(list(sample_group)):
             self.group_assignment.append((group, monsters))
         for element, modifiers in sorted(list(sample_mod)):
@@ -203,31 +222,80 @@ class Groups(RoomTask):
 
         self.agent = self.place_object(self.Agent())
 
-        self.target_group, target_monsters = random.choice(self.group_assignment)
+        if FIXED:
+            self.target_group, target_monsters = self.group_assignment[ID]
+        else:
+            self.target_group, target_monsters = random.choice(self.group_assignment)
 
         # choose a target element
-        target_element, target_modifiers = random.choice(self.modifier_assignment)
+        if FIXED:
+            target_element, target_modifiers = self.modifier_assignment[ID]
+        else:
+            target_element, target_modifiers = random.choice(self.modifier_assignment)
 
         # choose a target monster
-        self.target_monster = self.place_object(self.Monster(target_element, name=random.choice(target_monsters)))
+        if FIXED:
+            self.target_monster = self.place_object(self.Monster(target_element, name=target_monsters[ID]))
+        else:
+            self.target_monster = self.place_object(self.Monster(target_element, name=random.choice(target_monsters)))
 
         # create a target item
         good = self.place_object(I.Unarmed(hit=100, damage='1'))
         good.add_elemental_damage(target_element, dmg=50)
-        good.name = '{} {}'.format(random.choice(target_modifiers), random.choice(self.items))
+        if FIXED:
+            good.name = '{} {}'.format(target_modifiers[ID], self.items[ID])
+        else:
+            good.name = '{} {}'.format(random.choice(target_modifiers), random.choice(self.items))
         good.char = 'y'
 
         # create a distractor item
         self.distractor_item = bad = self.place_object(I.Unarmed(hit=100, damage='1'))
-        bad_element, bad_modifiers = random.choice([m for m in self.modifier_assignment if m[0] != target_element])
+        if FIXED:
+            bad_element, bad_modifiers = [m for m in self.modifier_assignment if m[0] != target_element][ID]
+        else:
+            bad_element, bad_modifiers = random.choice([m for m in self.modifier_assignment if m[0] != target_element])
         bad.add_elemental_damage(bad_element, dmg=50)
-        bad.name = '{} {}'.format(random.choice(bad_modifiers), random.choice(self.items))
+        if FIXED:
+            bad.name = '{} {}'.format(bad_modifiers[ID], self.items[ID])
+        else:
+            bad.name = '{} {}'.format(random.choice(bad_modifiers), random.choice(self.items))
         bad.char = 'n'
 
         # create a distractor monster
-        bad_group, bad_monsters = random.choice([g for g in self.group_assignment if g[0] != self.target_group])
-        self.distractor_monster = self.place_object(self.Monster(bad_element, name=random.choice(bad_monsters)))
+        if FIXED:
+            bad_group, bad_monsters = [g for g in self.group_assignment if g[0] != self.target_group][ID]
+        else:
+            bad_group, bad_monsters = random.choice([g for g in self.group_assignment if g[0] != self.target_group])
+        if FIXED:
+            self.distractor_monster = self.place_object(self.Monster(bad_element, name=bad_monsters[ID]))
+        else:
+            self.distractor_monster = self.place_object(self.Monster(bad_element, name=random.choice(bad_monsters)))
         self.distractor_monster.char = '?'
+        
+    def save_state_dict(self):
+        d = {}
+        for k in self.__dict__.keys():
+            if k != 'configs':
+                d[k] = copy.deepcopy(self.__dict__[k])
+        return d
+    
+    def load_state_dict(self, d):
+        for k in d.keys():
+            setattr(self, k, d[k])
+            
+        # substitute agent contained in the world class with a pointer to self.agent 
+        # so that they share the action queue
+        if len(list(self.world.agents)) == 1:
+            old_agent = list(self.world.agents)[0] #assuming only 1 agent is present
+            pos = old_agent.position # store position
+            self.world.remove_object(old_agent) # remove agent
+            self.agent.position = None # bypass assert obj.position is None to place object
+            self.world.place_object_at_pos(self.agent, pos) # place self.agent where old_agent was
+        elif len(list(self.world.agents)) == 0:
+            pass # agent is dead, nothign to do
+        else:
+            raise Exception("Unexpected number of agents in the world: {}".format(len(list(self.world.agents)) ))
+        
 
 
 class GroupsDev(Groups):
