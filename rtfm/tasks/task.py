@@ -63,11 +63,15 @@ class Task(gym.Env):
         raise NotImplementedError()
 
     def step(self, Action):
+        #print("Action: ", Action)
         if isinstance(Action, int):
             Action = M.QueuedAgent.valid_moves[Action]
+        #print("Action: ", Action)
         self.iter += 1
         if self.agent is not None:
             self.agent.queue_action(Action)
+        #print("self.agent: ", self.agent, id(self.agent))
+        #print("self.agent.queue: ", self.agent.queue)
         executed = self.engine.run_turn(self.world)
         self.history.append(executed)
         r, f, w = self.get_reward_finish_win()

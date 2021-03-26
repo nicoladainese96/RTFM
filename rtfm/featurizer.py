@@ -184,6 +184,7 @@ class Render(Featurizer):
         self.clear()
         print("\r")
         print(task.world.render(perspective=task.perspective))
+        print(task.get_inv())
         return {}
 
 
