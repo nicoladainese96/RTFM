@@ -62,7 +62,7 @@ class Task(gym.Env):
     def get_reward_finish_win(self):
         raise NotImplementedError()
 
-    def step(self, Action):
+    def step(self, Action, verbose=False):
         #print("Action: ", Action)
         if isinstance(Action, int):
             Action = M.QueuedAgent.valid_moves[Action]
@@ -74,7 +74,7 @@ class Task(gym.Env):
         #print("self.agent.queue: ", self.agent.queue)
         executed = self.engine.run_turn(self.world)
         self.history.append(executed)
-        r, f, w = self.get_reward_finish_win()
+        r, f, w = self.get_reward_finish_win(verbose)
         return self.featurizer.featurize(self), r, f, w
 
     def get_world(self):

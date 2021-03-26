@@ -143,19 +143,32 @@ class Groups(RoomTask):
         self._cache = {}
         super().__init__(room_shape, featurizer, partially_observable, self.default_max_iter, max_placement, max_name, max_inv, max_wiki, max_task, time_penalty, shuffle_wiki=shuffle_wiki)
 
-    def get_reward_finish_win(self):
+    def get_reward_finish_win(self, verbose=False):
+        vprint = print if verbose else lambda *args, **kwargs: None
+        
         agent_dead = self.agent_is_dead()
+        vprint("agent_dead: ",agent_dead)
+        
         killed_enemy = not self.target_monster.is_alive() or not self.distractor_monster.is_alive()
+        vprint("killed_enemy: ",killed_enemy)
+        
         killed_correct_enemy = not self.target_monster.is_alive()
+        vprint("killed_correct_enemy: ",killed_correct_enemy)
+        
         finished = killed_enemy or self.out_of_turns() or agent_dead
+        vprint("finished: ",finished)
+        
         won = killed_correct_enemy and not agent_dead
-
+        vprint("won: ",won)
+        
         r = self.time_penalty
         if finished:
             if won:
                 r = 1
             else:
                 r = -1
+        vprint("reward: ",r)
+        
         return r, finished, won
 
     def get_task(self):
@@ -295,6 +308,25 @@ class Groups(RoomTask):
             pass # agent is dead, nothign to do
         else:
             raise Exception("Unexpected number of agents in the world: {}".format(len(list(self.world.agents)) ))
+            
+        # do the same with the monsters
+        monster_list = list(self.world.monsters - self.world.agents) # agent is contained also into monsters
+        if len(monster_list)>0:
+            for m in monster_list:
+                # get info to identify monster
+                pos = m.position
+                name = m.name
+                # remove monster from the map
+                self.world.remove_object(m)
+                # identify in self attributes the matching monster (either self.target_monster or self.distractor_monster)
+                if name == self.target_monster.name:
+                    self.target_monster.position = None # bypass assert obj.position is None to place object
+                    self.world.place_object_at_pos(self.target_monster, pos) # place self.target_monster where m was
+                elif name == self.distractor_monster.name:
+                    self.distractor_monster.position = None # bypass assert obj.position is None to place object
+                    self.world.place_object_at_pos(self.distractor_monster, pos) # place self.distractor_monster where m was
+                else:
+                    raise Exception("Monster name {} is not the name of the distractor nor that of the target ".format(name))
         
 
 
