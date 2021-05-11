@@ -23,45 +23,61 @@ ID = 0
 
 def generate_all(all_monsters, all_groups, all_modifiers):
     # all monster assignments
-    monster_groupings = set()
+    #monster_groupings = set()
+    monster_groupings = []
     monsters_per_group = len(all_monsters) // len(all_groups)
     for monsters in itertools.permutations(all_monsters, len(all_monsters)):
         groups = []
         for i in range(0, len(monsters), monsters_per_group):
             group = monsters[i:i+monsters_per_group]
-            groups.append(frozenset(group))
-        monster_groupings.add(frozenset(groups))
-    monster_assignments = set()
+            #groups.append(frozenset(group))
+            groups.append(list(group))
+        #monster_groupings.add(frozenset(groups))
+        monster_groupings.append(list(groups))
+    #monster_assignments = set()
+    monster_assignments = []
     for groups in itertools.permutations(all_groups, len(all_groups)):
         for monster_grouping in monster_groupings:
-            assignment = set()
+            #assignment = set()
+            assignment = []
             for g, mg in zip(groups, monster_grouping):
-                assignment.add((g, tuple(sorted(list(mg)))))
-            monster_assignments.add(frozenset(assignment))
-
+                assignment.append((g, tuple(sorted(list(mg)))))
+            #monster_assignments.add(frozenset(assignment))
+            monster_assignments.append(assignment)
+    #monster_assignments = list(monster_assignments)# added by me
+    #monster_assignments.sort()# added by me
+    
     # all item assignments
-    modifier_groupings = set()
+    #modifier_groupings = set()
+    modifier_groupings = []
     modifiers_per_element = len(all_modifiers) // len(ALL_TYPES)
     for modifiers in itertools.permutations(all_modifiers, len(all_modifiers)):
         groups = []
         for i in range(0, len(modifiers), modifiers_per_element):
             group = modifiers[i:i+modifiers_per_element]
-            groups.append(frozenset(group))
-        modifier_groupings.add(frozenset(groups))
-    modifier_assignments = set()
+            #groups.append(frozenset(group))
+            groups.append(list(group))
+        #modifier_groupings.add(frozenset(groups))
+        modifier_groupings.append(groups)
+    #modifier_assignments = set()
+    modifier_assignments = []
     for elements in itertools.permutations(list(range(len(ALL_TYPES))), len(ALL_TYPES)):
         for modifier_grouping in modifier_groupings:
             assignment = []
             for e, mg in zip(elements, modifier_grouping):
                 assignment.append((e, tuple(sorted(list(mg)))))
-            modifier_assignments.add(frozenset(assignment))
-
+            #modifier_assignments.add(frozenset(assignment))
+            modifier_assignments.append(list(assignment))
+    #modifier_assignments = list(modifier_assignments) # added by me
+    #modifier_assignments.sort()
+    
     all_assignments = []
     for m in monster_assignments:
         for mm in modifier_assignments:
             all_assignments.append((m, mm))
     all_assignments.sort()
-
+    #print("all_assignments[0]: ", all_assignments[0])
+    
     if not FIXED:
         random.Random(0).shuffle(all_assignments)
 
@@ -226,29 +242,41 @@ class Groups(RoomTask):
         # sample dynamics
         if FIXED:
             sample_group, sample_mod = self.configs[ID]
+            #print("sample_group: ", sorted(sample_group))
+            #print("sample_mod: ", sample_mod)
         else:
             sample_group, sample_mod = random.choice(self.configs)
+            
         for group, monsters in sorted(list(sample_group)):
+            #print("group: ", group)
+            #print("monsters: ", monsters)
             self.group_assignment.append((group, monsters))
         for element, modifiers in sorted(list(sample_mod)):
+            #print("element: ", element)
+            #print("modifiers: ", modifiers)
             self.modifier_assignment.append((ALL_TYPES[element], modifiers))
 
         self.agent = self.place_object(self.Agent())
 
         if FIXED:
             self.target_group, target_monsters = self.group_assignment[ID]
+            #print("self.target_group: ", self.target_group)
+            #print("target_monsters: ", target_monsters) # not fixed
         else:
             self.target_group, target_monsters = random.choice(self.group_assignment)
 
         # choose a target element
         if FIXED:
-            target_element, target_modifiers = self.modifier_assignment[ID]
+            target_element, target_modifiers = self.modifier_assignment[ID] # not fixed
+            #print("target_element: ", target_element)
+            #print("target_modifiers: ", target_modifiers)  # not fixed
         else:
             target_element, target_modifiers = random.choice(self.modifier_assignment)
 
         # choose a target monster
         if FIXED:
             self.target_monster = self.place_object(self.Monster(target_element, name=target_monsters[ID]))
+            #print("self.target_monster: ", self.target_monster)
         else:
             self.target_monster = self.place_object(self.Monster(target_element, name=random.choice(target_monsters)))
 
@@ -257,6 +285,7 @@ class Groups(RoomTask):
         good.add_elemental_damage(target_element, dmg=50)
         if FIXED:
             good.name = '{} {}'.format(target_modifiers[ID], self.items[ID])
+            #print("good.name: ", good.name)
         else:
             good.name = '{} {}'.format(random.choice(target_modifiers), random.choice(self.items))
         good.char = 'y'
@@ -265,11 +294,14 @@ class Groups(RoomTask):
         self.distractor_item = bad = self.place_object(I.Unarmed(hit=100, damage='1'))
         if FIXED:
             bad_element, bad_modifiers = [m for m in self.modifier_assignment if m[0] != target_element][ID]
+            #print("bad_element: ", bad_element)
+            #print("bad_modifiers: ", bad_modifiers) # not fixed
         else:
             bad_element, bad_modifiers = random.choice([m for m in self.modifier_assignment if m[0] != target_element])
         bad.add_elemental_damage(bad_element, dmg=50)
         if FIXED:
             bad.name = '{} {}'.format(bad_modifiers[ID], self.items[ID])
+            #print("bad.name: ", bad.name)
         else:
             bad.name = '{} {}'.format(random.choice(bad_modifiers), random.choice(self.items))
         bad.char = 'n'
@@ -277,13 +309,17 @@ class Groups(RoomTask):
         # create a distractor monster
         if FIXED:
             bad_group, bad_monsters = [g for g in self.group_assignment if g[0] != self.target_group][ID]
+            #print("bad_group: ", bad_group)
+            #print("bad_monsters: ", bad_monsters) # not fixed
         else:
             bad_group, bad_monsters = random.choice([g for g in self.group_assignment if g[0] != self.target_group])
         if FIXED:
             self.distractor_monster = self.place_object(self.Monster(bad_element, name=bad_monsters[ID]))
+            #print("self.distractor_monster: ", self.distractor_monster)
         else:
             self.distractor_monster = self.place_object(self.Monster(bad_element, name=random.choice(bad_monsters)))
         self.distractor_monster.char = '?'
+        
         
     def save_state_dict(self):
         d = {}
@@ -327,7 +363,7 @@ class Groups(RoomTask):
                     self.world.place_object_at_pos(self.distractor_monster, pos) # place self.distractor_monster where m was
                 else:
                     raise Exception("Monster name {} is not the name of the distractor nor that of the target ".format(name))
-        
+
 
 
 class GroupsDev(Groups):
